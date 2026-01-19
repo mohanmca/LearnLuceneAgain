@@ -22,7 +22,11 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.FuzzyQuery;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermQuery;
@@ -106,6 +110,7 @@ public class App {
         return true;
       }
 
+
       Document doc = searcher.doc(docs.scoreDocs[0].doc);
       if (doc.getField("lastModified") == null || doc.getField("size") == null) {
         return true;
@@ -138,8 +143,7 @@ public class App {
 
     // QueryParser applies the same analyzer to build the final query.
     // The parsed query makes visible the actual terms and operators Lucene will use.
-    QueryParser parser = new QueryParser("content", analyzer);
-    Query query = parser.parse(queryText);
+    Query query = buildQuery(analyzer, "content", queryText);
     System.out.println("Parsed query: " + query);
 
     try (DirectoryReader reader = DirectoryReader.open(directory)) {
@@ -178,5 +182,24 @@ public class App {
       return cleaned;
     }
     return cleaned.substring(0, maxLen) + "...";
+  }
+
+  private static Query buildQuery(Analyzer analyzer, String field, String queryText) throws Exception {
+    if (isSimpleTerm(queryText)) {
+      List<String> tokens = analyzeText(analyzer, field, queryText);
+      if (tokens.size() == 1) {
+        String term = tokens.get(0);
+        BooleanQuery.Builder builder = new BooleanQuery.Builder();
+        builder.add(new PrefixQuery(new Term(field, term)), BooleanClause.Occur.SHOULD);
+        builder.add(new FuzzyQuery(new Term(field, term), 2), BooleanClause.Occur.SHOULD);
+        return builder.build();
+      }
+    }
+    QueryParser parser = new QueryParser(field, analyzer);
+    return parser.parse(queryText);
+  }
+
+  private static boolean isSimpleTerm(String text) {
+    return text != null && text.matches("[A-Za-z0-9]+");
   }
 }
