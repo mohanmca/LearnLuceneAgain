@@ -11,19 +11,13 @@ Instead of reading a file by copying bytes from the disk into the Java heap (lik
 *   **OS Caching:** It relies entirely on the OS file system cache (page cache). If you have free RAM, the OS will keep the index hot in memory for you.
 
 ### When to use it?
-
-You should **almost always** use it on modern 64-bit systems.
-
 1.  **You are on a 64-bit JVM:** The virtual address space is practically infinite ($2^{64}$), so mapping huge index files (GBs or TBs) is no problem.
 2.  **You want maximum read performance:** It is generally the fastest way to access a Lucene index because of the reduced overhead.
 3.  **You want to minimize Java Heap pressure:** Since the index data lives in the OS cache (off-heap), your JVM Garbage Collector doesn't have to manage those gigabytes of data.
 
-> **Note on Windows:** In the past, `MMapDirectory` was tricky on Windows because memory-mapped files could not be deleted (which Lucene needs to do during merging). However, modern Lucene versions and Java updates have largely mitigated this. `FSDirectory.open()` will typically choose `MMapDirectory` safely on 64-bit Windows.
 
-### Application to your code
-
+### Why we use FSDirectory, what is its pattern?
 You are currently using `FSDirectory.open(indexPath)` in `App.java` (Line 63), which is the **best practice**.
-
 ```java
 // Your current code
 try (Analyzer analyzer = new StandardAnalyzer();
@@ -31,16 +25,6 @@ try (Analyzer analyzer = new StandardAnalyzer();
 ```
 
 `FSDirectory.open` is a smart factory. It checks your OS and Architecture (64-bit vs 32-bit) and automatically picks the best implementation.
-
-*   On **64-bit Windows/Linux/macOS**, it usually returns `MMapDirectory`.
-*   On **32-bit systems**, it usually returns `SimpleFSDirectory` or `NIOFSDirectory` to avoid running out of address space.
-
-**To verify exactly what you are getting:**
-You can simply print the class name in your code:
-
-```java
-System.out.println("Using Directory: " + directory.getClass().getSimpleName());
-```
 
 ---
 
